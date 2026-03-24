@@ -14,6 +14,27 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  user: {
+    modelName: "user",
+    additionalFields: {
+      nickname: {
+        type: "string",
+        required: false,
+      },
+      favoritesSpots: {
+        type: "number[]",
+        required: false,
+      },
+      age: {
+        type: "number",
+        required: false,
+      },
+      country: {
+        type: "string",
+        required: false,
+      },
+    },
+  },
   plugins: [
     magicLink({
       sendMagicLink: async ({ email, url }, ctx) => {

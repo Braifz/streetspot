@@ -1,14 +1,10 @@
 import { Navbar } from "@/src/components/common/Navbar";
-import { db } from "@/src/db";
-import { usersTable } from "@/src/db/schema";
 import { getSession } from "@/src/lib/utils/auth";
 import { ArrowRight, Flame, Globe, MapPin, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 export default async function Home() {
-  // const result = await db.select().from(usersTable);
-
   const session = await getSession();
 
   return (
@@ -123,7 +119,7 @@ export default async function Home() {
           <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-12 gap-4">
             <div>
               <span className="text-xs uppercase tracking-[0.3em] text-primary font-bold">
-                // LO MEJOR
+                {/* // LO MEJOR */}
               </span>
               <h2 className="font-display text-5xl md:text-7xl tracking-wider text-foreground mt-2">
                 SPOTS DESTACADOS
