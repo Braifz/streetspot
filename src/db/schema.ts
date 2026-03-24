@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -6,54 +6,135 @@ import {
   boolean,
   index,
   integer,
-  varchar,
+  numeric,
+  AnyPgColumn,
+  check,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // TODO: Improve this tables and add RLS
 
-export const usersTable = pgTable("users", {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: varchar({ length: 255 }).notNull(),
-  nickname: varchar({ length: 255 }).notNull(),
-  favoritesSpots: varchar({ length: 255 }).notNull(), // Array of spot IDs
-  country: varchar({ length: 255 }).notNull(),
-  age: integer().notNull(),
-  email: varchar({ length: 255 }).notNull().unique(),
-  createdAt: varchar({ length: 255 }).notNull(),
-  updatedAt: varchar({ length: 255 }).notNull(),
-});
+export const spots = pgTable(
+  "spots",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    country: text("country").notNull(),
+    city: text("city").notNull(),
+    address: text("address"),
+    mapUrl: text("map_url"),
+    submittedBy: text("submitted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    latitude: numeric("latitude", { precision: 10, scale: 8 }).notNull(),
+    longitude: numeric("longitude", { precision: 11, scale: 8 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    check(
+      "spots_latitude_range_chk",
+      sql`${table.latitude} BETWEEN -90 AND 90`,
+    ),
+    check(
+      "spots_longitude_range_chk",
+      sql`${table.longitude} BETWEEN -180 AND 180`,
+    ),
+    index("spots_location_idx").on(table.latitude, table.longitude),
+    index("spots_city_country_idx").on(table.city, table.country),
+    index("spots_submitted_by_idx").on(table.submittedBy),
+  ],
+);
 
-export const spotsTable = pgTable("spots", {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  name: varchar({ length: 255 }).notNull(),
-  description: varchar({ length: 255 }).notNull(),
-  country: varchar({ length: 255 }).notNull(),
-  city: varchar({ length: 255 }).notNull(),
-  address: varchar({ length: 255 }).notNull(),
-  stars: integer().notNull(),
-  createdAt: varchar({ length: 255 }).notNull(),
-  updatedAt: varchar({ length: 255 }).notNull(),
-  images: varchar({ length: 255 }).notNull(),
-  size: varchar({ length: 255 }).notNull(),
-});
+export const spotImages = pgTable(
+  "spot_images",
+  {
+    id: text("id").primaryKey(),
+    spotId: text("spot_id")
+      .references(() => spots.id, { onDelete: "cascade" })
+      .notNull(),
+    uploadedBy: text("uploaded_by")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    url: text("url").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("spot_images_spot_idx").on(table.spotId),
+    index("spot_images_uploaded_by_idx").on(table.uploadedBy),
+  ],
+);
 
-export const commentsTable = pgTable("comments", {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer().notNull(),
-  spotId: integer().notNull(),
-  content: varchar({ length: 255 }).notNull(),
-  createdAt: varchar({ length: 255 }).notNull(),
-  updatedAt: varchar({ length: 255 }).notNull(),
-  likes: integer().notNull(),
-});
+export const spotRatings = pgTable(
+  "spot_ratings",
+  {
+    id: text("id").primaryKey(),
+    spotId: text("spot_id")
+      .references(() => spots.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    stars: integer("stars").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check("stars_between_1_and_5", sql`${table.stars} BETWEEN 1 AND 5`),
+    index("spot_ratings_spot_idx").on(table.spotId),
+    index("spot_ratings_user_idx").on(table.userId),
+    uniqueIndex("spot_ratings_unique_user").on(table.spotId, table.userId),
+  ],
+);
+export const comments = pgTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    spotId: text("spot_id")
+      .references(() => spots.id, { onDelete: "cascade" })
+      .notNull(),
+    parentId: text("parent_id").references((): AnyPgColumn => comments.id), // self-referencing
+    userId: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    content: text().notNull(),
+    path: text().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("comments_spot_parent_idx").on(table.spotId, table.parentId),
+    index("comments_path_idx").on(table.spotId, table.path),
+    index("comments_user_idx").on(table.userId),
+  ],
+);
 
-// AUTH SCHEMA
+// =========================================================================
+//                          AUTH SCHEMAS
+// =========================================================================
+
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  nickname: text("nickname"),
+  favoritesSpots: integer("favorites_spots").array(),
+  age: integer("age"),
+  country: text("country"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -69,6 +150,7 @@ export const session = pgTable(
     token: text("token").notNull().unique(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
+      .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
     ipAddress: text("ip_address"),
@@ -98,10 +180,17 @@ export const account = pgTable(
     password: text("password"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
+      .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    index("account_userId_idx").on(table.userId),
+    uniqueIndex("account_provider_account_unique").on(
+      table.providerId,
+      table.accountId,
+    ),
+  ],
 );
 
 export const verification = pgTable(
@@ -119,22 +208,3 @@ export const verification = pgTable(
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
-
-export const userRelations = relations(user, ({ many }) => ({
-  sessions: many(session),
-  accounts: many(account),
-}));
-
-export const sessionRelations = relations(session, ({ one }) => ({
-  user: one(user, {
-    fields: [session.userId],
-    references: [user.id],
-  }),
-}));
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
-  }),
-}));
